@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Sheets Manager</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .main-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin: 2rem auto;
+            max-width: 1200px;
+        }
+        
+        .header {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 2rem;
+            border-radius: 20px 20px 0 0;
+            text-align: center;
+        }
+        
+        .sheet-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            margin: 1rem;
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+        
+        .sheet-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .sheet-header {
+            background: linear-gradient(45deg, #4facfe, #00f2fe);
+            color: white;
+            padding: 1rem;
+            font-weight: bold;
+        }
+        
+        .btn-custom {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-custom:hover {
+            background: linear-gradient(45deg, #764ba2, #667eea);
+            transform: translateY(-2px);
+            color: white;
+        }
+        
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #667eea;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+        }
+        
+        .config-section {
+            background: #f8f9fa;
+            padding: 2rem;
+            border-radius: 0 0 20px 20px;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="main-container">
+            <div class="header">
+                <h1><i class="fas fa-table me-3"></i>Google Sheets Manager</h1>
+                <p class="mb-0">Manage your Google Sheets data with ease</p>
+            </div>
+            
+            <div class="config-section">
+                <h3><i class="fas fa-cog me-2"></i>Configuration</h3>
+                <div class="row">
+                    <div class="col-md-6">
+                        <label for="apiKey" class="form-label">Google Sheets API Key</label>
+                        <input type="text" class="form-control" id="apiKey" placeholder="Enter your API key">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Sheet IDs</label>
+                        <input type="text" class="form-control mb-2" id="sheet1Id" placeholder="Sheet 1 ID">
+                        <input type="text" class="form-control mb-2" id="sheet2Id" placeholder="Sheet 2 ID">
+                        <input type="text" class="form-control" id="sheet3Id" placeholder="Sheet 3 ID">
+                    </div>
+                </div>
+                <button class="btn btn-custom mt-3" onclick="loadAllSheets()">
+                    <i class="fas fa-sync me-2"></i>Load Sheets
+                </button>
+            </div>
+            
+            <div class="p-4">
+                <div id="sheetsContainer" class="row">
+                    <!-- Sheets will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div class="modal fade" id="dataModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Add New Row</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="dataForm">
+                        <div id="formFields">
+                            <!-- Dynamic form fields will be added here -->
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-custom" onclick="saveData()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentSheetId = '';
+        let currentRowIndex = -1;
+        let sheetsData = {};
+
+        // Configuration
+        const SHEETS_CONFIG = {
+            sheet1: { name: 'Sheet 1', range: 'A1:Z1000' },
+            sheet2: { name: 'Sheet 2', range: 'A1:Z1000' },
+            sheet3: { name: 'Sheet 3', range: 'A1:Z1000' }
+        };
+
+        async function loadAllSheets() {
+            const apiKey = document.getElementById('apiKey').value;
+            const sheet1Id = document.getElementById('sheet1Id').value;
+            const sheet2Id = document.getElementById('sheet2Id').value;
+            const sheet3Id = document.getElementById('sheet3Id').value;
+
+            if (!apiKey || !sheet1Id || !sheet2Id || !sheet3Id) {
+                showError('Please fill in all configuration fields.');
+                return;
+            }
+
+            const sheetIds = [sheet1Id, sheet2Id, sheet3Id];
+            const container = document.getElementById('sheetsContainer');
+            container.innerHTML = '<div class="col-12 loading"><div class="spinner me-2"></div>Loading sheets...</div>';
+
+            try {
+                for (let i = 0; i < sheetIds.length; i++) {
+                    const sheetKey = `sheet${i + 1}`;
+                    const sheetData = await loadSheet(sheetIds[i], apiKey, SHEETS_CONFIG[sheetKey].range);
+                    sheetsData[sheetIds[i]] = sheetData;
+                    renderSheet(sheetIds[i], SHEETS_CONFIG[sheetKey].name, sheetData);
+                }
+            } catch (error) {
+                showError('Error loading sheets: ' + error.message);
+            }
+        }
+
+        async function loadSheet(sheetId, apiKey, range) {
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?key=${apiKey}`;
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            return data.values || [];
+        }
+
+        function renderSheet(sheetId, sheetName, data) {
+            const container = document.getElementById('sheetsContainer');
+            
+            if (container.innerHTML.includes('Loading')) {
+                container.innerHTML = '';
+            }
+
+            const headers = data[0] || [];
+            const rows = data.slice(1);
+
+            const sheetHtml = `
+                <div class="col-lg-4 mb-4">
+                    <div class="sheet-card">
+                        <div class="sheet-header">
+                            <h5 class="mb-0">${sheetName}</h5>
+                        </div>
+                        <div class="p-3">
+                            <button class="btn btn-custom btn-sm mb-3" onclick="openAddModal('${sheetId}', '${sheetName}')">
+                                <i class="fas fa-plus me-2"></i>Add Row
+                            </button>
+                            <div class="table-container">
+                                <table class="table table-sm table-striped">
+                                    <thead>
+                                        <tr>
+                                            ${headers.map(header => `<th>${header}</th>`).join('')}
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${rows.map((row, index) => `
+                                            <tr class="${row.some(cell => cell && cell.toString().toLowerCase().includes('delete')) ? 'table-danger' : ''}">
+                                                ${headers.map((_, colIndex) => `<td>${row[colIndex] || ''}</td>`).join('')}
+                                                <td>
+                                                    <button class="btn btn-outline-primary btn-sm me-1" onclick="editRow('${sheetId}', ${index + 1})">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-danger btn-sm" onclick="markForDeletion('${sheetId}', ${index + 1})">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            container.innerHTML += sheetHtml;
+        }
+
+        function openAddModal(sheetId, sheetName) {
+            currentSheetId = sheetId;
+            currentRowIndex = -1;
+            
+            const modal = new bootstrap.Modal(document.getElementById('dataModal'));
+            document.getElementById('modalTitle').textContent = `Add Row to ${sheetName}`;
+            
+            generateFormFields(sheetId);
+            modal.show();
+        }
+
+        function editRow(sheetId, rowIndex) {
+            currentSheetId = sheetId;
+            currentRowIndex = rowIndex;
+            
+            const modal = new bootstrap.Modal(document.getElementById('dataModal'));
+            document.getElementById('modalTitle').textContent = `Edit Row ${rowIndex}`;
+            
+            generateFormFields(sheetId, rowIndex);
+            modal.show();
+        }
+
+        function generateFormFields(sheetId, rowIndex = -1) {
+            const data = sheetsData[sheetId];
+            const headers = data[0] || [];
+            const rowData = rowIndex > -1 ? data[rowIndex] : [];
+            
+            const formFields = document.getElementById('formFields');
+            formFields.innerHTML = '';
+            
+            headers.forEach((header, index) => {
+                const fieldHtml = `
+                    <div class="mb-3">
+                        <label class="form-label">${header}</label>
+                        <input type="text" class="form-control" name="field_${index}" value="${rowData[index] || ''}">
+                    </div>
+                `;
+                formFields.innerHTML += fieldHtml;
+            });
+        }
+
+        async function saveData() {
+            const apiKey = document.getElementById('apiKey').value;
+            const form = document.getElementById('dataForm');
+            const formData = new FormData(form);
+            
+            const values = [];
+            const data = sheetsData[currentSheetId];
+            const headers = data[0] || [];
+            
+            headers.forEach((_, index) => {
+                values.push(formData.get(`field_${index}`) || '');
+            });
+
+            try {
+                if (currentRowIndex === -1) {
+                    // Add new row
+                    await appendRow(currentSheetId, apiKey, values);
+                } else {
+                    // Update existing row
+                    await updateRow(currentSheetId, apiKey, currentRowIndex, values);
+                }
+                
+                showSuccess('Data saved successfully!');
+                bootstrap.Modal.getInstance(document.getElementById('dataModal')).hide();
+                loadAllSheets(); // Refresh the display
+            } catch (error) {
+                showError('Error saving data: ' + error.message);
+            }
+        }
+
+        async function appendRow(sheetId, apiKey, values) {
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A:Z:append?valueInputOption=RAW&key=${apiKey}`;
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    values: [values]
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+        }
+
+        async function updateRow(sheetId, apiKey, rowIndex, values) {
+            const range = `A${rowIndex + 1}:Z${rowIndex + 1}`;
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?valueInputOption=RAW&key=${apiKey}`;
+            
+            const response = await fetch(url, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    values: [values]
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+        }
+
+        async function markForDeletion(sheetId, rowIndex) {
+            if (confirm('Mark this row for deletion?')) {
+                const apiKey = document.getElementById('apiKey').value;
+                const data = sheetsData[sheetId];
+                const rowData = [...data[rowIndex]];
+                
+                // Add "DELETE" marker to the first column
+                rowData[0] = 'DELETE - ' + (rowData[0] || '');
+                
+                try {
+                    await updateRow(sheetId, apiKey, rowIndex, rowData);
+                    showSuccess('Row marked for deletion!');
+                    loadAllSheets();
+                } catch (error) {
+                    showError('Error marking row for deletion: ' + error.message);
+                }
+            }
+        }
+
+        function showError(message) {
+            const alert = document.createElement('div');
+            alert.className = 'error';
+            alert.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i>${message}`;
+            document.querySelector('.config-section').appendChild(alert);
+            setTimeout(() => alert.remove(), 5000);
+        }
+
+        function showSuccess(message) {
+            const alert = document.createElement('div');
+            alert.className = 'success';
+            alert.innerHTML = `<i class="fas fa-check-circle me-2"></i>${message}`;
+            document.querySelector('.config-section').appendChild(alert);
+            setTimeout(() => alert.remove(), 3000);
+        }
+
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Google Sheets Manager initialized');
+        });
+    </script>
+</body>
+</html>
