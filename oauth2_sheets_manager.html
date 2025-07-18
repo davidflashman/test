@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OAuth2 Google Sheets Manager</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .main-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin: 2rem auto;
+            max-width: 1200px;
+        }
+        
+        .header {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 2rem;
+            border-radius: 20px 20px 0 0;
+            text-align: center;
+        }
+        
+        .auth-section {
+            background: #f8f9fa;
+            padding: 2rem;
+            text-align: center;
+            border-radius: 0 0 20px 20px;
+        }
+        
+        .auth-status {
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+        }
+        
+        .authenticated {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .not-authenticated {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .sheet-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            margin: 1rem;
+            overflow: hidden;
+            transition: transform 0.3s ease;
+            height: fit-content;
+        }
+        
+        .sheet-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .sheet-header {
+            background: linear-gradient(45deg, #4facfe, #00f2fe);
+            color: white;
+            padding: 1rem;
+            font-weight: bold;
+        }
+        
+        .btn-custom {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-custom:hover {
+            background: linear-gradient(45deg, #764ba2, #667eea);
+            transform: translateY(-2px);
+            color: white;
+        }
+        
+        .btn-auth {
+            background: linear-gradient(45deg, #4285f4, #34a853);
+            border: none;
+            color: white;
+            padding: 12px 30px;
+            font-size: 1.1rem;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-auth:hover {
+            background: linear-gradient(45deg, #34a853, #4285f4);
+            transform: translateY(-2px);
+            color: white;
+        }
+        
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #667eea;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+        }
+        
+        .config-section {
+            background: #f8f9fa;
+            padding: 2rem;
+            border-radius: 0 0 20px 20px;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid white;
+        }
+        
+        .security-notice {
+            background: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="main-container">
+            <div class="header">
+                <h1><i class="fas fa-shield-alt me-3"></i>OAuth2 Google Sheets Manager</h1>
+                <p class="mb-0">Secure access to your Google Sheets with OAuth2 authentication</p>
+            </div>
+            
+            <div class="auth-section">
+                <div class="security-notice">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Security Notice:</strong> This application uses OAuth2 for secure authentication. Your credentials are never stored by this application.
+                </div>
+                
+                <div id="authStatus" class="auth-status not-authenticated">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Not authenticated. Please sign in with Google to access your sheets.
+                </div>
+                
+                <div id="userInfo" class="user-info" style="display: none;">
+                    <img id="userAvatar" class="user-avatar" src="" alt="User Avatar">
+                    <div>
+                        <strong id="userName"></strong><br>
+                        <small id="userEmail"></small>
+                    </div>
+                </div>
+                
+                <button id="authButton" class="btn btn-auth" onclick="authenticate()" style="display: none;">
+                    <i class="fab fa-google me-2"></i>Sign In with Google
+                </button>
+                
+                <button id="signOutButton" class="btn btn-outline-danger" onclick="signOut()" style="display: none;">
+                    <i class="fas fa-sign-out-alt me-2"></i>Sign Out
+                </button>
+            </div>
+            
+            <div class="config-section" id="configSection" style="display: none;">
+                <h3><i class="fas fa-cog me-2"></i>Configuration</h3>
+                <div class="row">
+                    <div class="col-md-12">
+                        <label class="form-label">Sheet IDs (Optional - leave blank to skip)</label>
+                        <input type="text" class="form-control mb-2" id="sheet1Id" placeholder="Sheet 1 ID (optional)">
+                        <input type="text" class="form-control mb-2" id="sheet2Id" placeholder="Sheet 2 ID (optional)">
+                        <input type="text" class="form-control mb-2" id="sheet3Id" placeholder="Sheet 3 ID (optional)">
+                        <input type="text" class="form-control mb-2" id="sheet4Id" placeholder="Sheet 4 ID (optional)">
+                        <input type="text" class="form-control" id="sheet5Id" placeholder="Sheet 5 ID (optional)">
+                    </div>
+                </div>
+                <button class="btn btn-custom mt-3" onclick="loadAllSheets()">
+                    <i class="fas fa-sync me-2"></i>Load Sheets
+                </button>
+            </div>
+            
+            <div class="p-4" id="sheetsSection" style="display: none;">
+                <div id="sheetsContainer" class="row">
+                    <!-- Sheets will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div class="modal fade" id="dataModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Add New Row</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="dataForm">
+                        <div id="formFields">
+                            <!-- Dynamic form fields will be added here -->
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-custom" onclick="saveData()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // ⚠️ REPLACE WITH YOUR CLIENT ID
+        const CLIENT_ID = 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com';
+        const DISCOVERY_DOC = 'https://sheets.googleapis.com/$discovery/rest?version=v4';
+        const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
+
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+        let currentSheetId = '';
+        let currentRowIndex = -1;
+        let sheetsData = {};
+        let isAuthenticated = false;
+
+        // Configuration
+        const SHEETS_CONFIG = {
+            sheet1: { name: 'Sheet 1', range: 'A1:Z1000' },
+            sheet2: { name: 'Sheet 2', range: 'A1:Z1000' },
+            sheet3: { name: 'Sheet 3', range: 'A1:Z1000' },
+            sheet4: { name: 'Sheet 4', range: 'A1:Z1000' },
+            sheet5: { name: 'Sheet 5', range: 'A1:Z1000' }
+        };
+
+        // Initialize Google APIs
+        async function initializeGapi() {
+            await gapi.load('client', initializeGapiClient);
+        }
+
+        async function initializeGapiClient() {
+            await gapi.client.init({
+                discoveryDocs: [DISCOVERY_DOC],
+            });
+            gapiInited = true;
+            maybeEnableButtons();
+        }
+
+        function initializeGis() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: (tokenResponse) => {
+                    if (tokenResponse.error !== undefined) {
+                        showError('Authentication failed: ' + tokenResponse.error);
+                        return;
+                    }
+                    handleAuthSuccess();
+                },
+            });
+            gisInited = true;
+            maybeEnableButtons();
+        }
+
+        function maybeEnableButtons() {
+            if (gapiInited && gisInited) {
+                document.getElementById('authButton').style.display = 'block';
+                checkClientId();
+            }
+        }
+
+        function checkClientId() {
+            if (CLIENT_ID === 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com') {
+                showError('Please replace CLIENT_ID with your actual Google OAuth2 Client ID');
+                document.getElementById('authButton').disabled = true;
+            }
+        }
+
+        function authenticate() {
+            if (gapi.client.getToken() === null) {
+                tokenClient.requestAccessToken();
+            } else {
+                handleAuthSuccess();
+            }
+        }
+
+        async function handleAuthSuccess() {
+            isAuthenticated = true;
+            updateAuthStatus();
+            await loadUserInfo();
+            document.getElementById('configSection').style.display = 'block';
+            document.getElementById('sheetsSection').style.display = 'block';
+        }
+
+        async function loadUserInfo() {
+            try {
+                const response = await gapi.client.request({
+                    path: 'https://www.googleapis.com/oauth2/v1/userinfo',
+                });
+                
+                const userInfo = response.result;
+                document.getElementById('userName').textContent = userInfo.name;
+                document.getElementById('userEmail').textContent = userInfo.email;
+                document.getElementById('userAvatar').src = userInfo.picture;
+                document.getElementById('userInfo').style.display = 'flex';
+            } catch (error) {
+                console.error('Error loading user info:', error);
+            }
+        }
+
+        function updateAuthStatus() {
+            const authStatus = document.getElementById('authStatus');
+            const authButton = document.getElementById('authButton');
+            const signOutButton = document.getElementById('signOutButton');
+            
+            if (isAuthenticated) {
+                authStatus.className = 'auth-status authenticated';
+                authStatus.innerHTML = '<i class="fas fa-check-circle me-2"></i>Successfully authenticated with Google';
+                authButton.style.display = 'none';
+                signOutButton.style.display = 'inline-block';
+            } else {
+                authStatus.className = 'auth-status not-authenticated';
+                authStatus.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Not authenticated. Please sign in with Google to access your sheets.';
+                authButton.style.display = 'inline-block';
+                signOutButton.style.display = 'none';
+                document.getElementById('userInfo').style.display = 'none';
+                document.getElementById('configSection').style.display = 'none';
+                document.getElementById('sheetsSection').style.display = 'none';
+            }
+        }
+
+        function signOut() {
+            const token = gapi.client.getToken();
+            if (token !== null) {
+                google.accounts.oauth2.revoke(token.access_token);
+                gapi.client.setToken('');
+            }
+            isAuthenticated = false;
+            updateAuthStatus();
+            document.getElementById('sheetsContainer').innerHTML = '';
+            sheetsData = {};
+        }
+
+        async function loadAllSheets() {
+            if (!isAuthenticated) {
+                showError('Please authenticate first');
+                return;
+            }
+
+            // Get all sheet IDs and filter out empty ones
+            const sheetIds = [];
+            const sheetConfigs = [];
+            
+            for (let i = 1; i <= 5; i++) {
+                const sheetId = document.getElementById(`sheet${i}Id`).value.trim();
+                if (sheetId) {
+                    sheetIds.push(sheetId);
+                    sheetConfigs.push({
+                        id: sheetId,
+                        key: `sheet${i}`,
+                        config: SHEETS_CONFIG[`sheet${i}`]
+                    });
+                }
+            }
+
+            if (sheetIds.length === 0) {
+                showError('Please enter at least one Sheet ID.');
+                return;
+            }
+
+            const container = document.getElementById('sheetsContainer');
+            container.innerHTML = '<div class="col-12 loading"><div class="spinner me-2"></div>Loading sheets...</div>';
+
+            try {
+                container.innerHTML = ''; // Clear loading message
+                
+                for (const sheetConfig of sheetConfigs) {
+                    try {
+                        const sheetData = await loadSheet(sheetConfig.id, sheetConfig.config.range);
+                        sheetsData[sheetConfig.id] = sheetData;
+                        renderSheet(sheetConfig.id, sheetConfig.config.name, sheetData);
+                    } catch (error) {
+                        showError(`Error loading ${sheetConfig.config.name}: ${error.message}`);
+                    }
+                }
+                
+                if (Object.keys(sheetsData).length > 0) {
+                    showSuccess(`Successfully loaded ${Object.keys(sheetsData).length} sheet(s)!`);
+                }
+            } catch (error) {
+                showError('Error loading sheets: ' + error.message);
+            }
+        }
+
+        async function loadSheet(sheetId, range) {
+            const request = {
+                spreadsheetId: sheetId,
+                range: range,
+            };
+            
+            try {
+                const response = await gapi.client.sheets.spreadsheets.values.get(request);
+                return response.result.values || [];
+            
