@@ -37,6 +37,7 @@
             margin: 1rem;
             overflow: hidden;
             transition: transform 0.3s ease;
+            height: fit-content;
         }
         
         .sheet-card:hover {
@@ -133,10 +134,12 @@
                         <input type="text" class="form-control" id="apiKey" placeholder="Enter your API key">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Sheet IDs</label>
-                        <input type="text" class="form-control mb-2" id="sheet1Id" placeholder="Sheet 1 ID">
-                        <input type="text" class="form-control mb-2" id="sheet2Id" placeholder="Sheet 2 ID">
-                        <input type="text" class="form-control" id="sheet3Id" placeholder="Sheet 3 ID">
+                        <label class="form-label">Sheet IDs (Optional - leave blank to skip)</label>
+                        <input type="text" class="form-control mb-2" id="sheet1Id" placeholder="Sheet 1 ID (optional)">
+                        <input type="text" class="form-control mb-2" id="sheet2Id" placeholder="Sheet 2 ID (optional)">
+                        <input type="text" class="form-control mb-2" id="sheet3Id" placeholder="Sheet 3 ID (optional)">
+                        <input type="text" class="form-control mb-2" id="sheet4Id" placeholder="Sheet 4 ID (optional)">
+                        <input type="text" class="form-control" id="sheet5Id" placeholder="Sheet 5 ID (optional)">
                     </div>
                 </div>
                 <button class="btn btn-custom mt-3" onclick="loadAllSheets()">
@@ -185,30 +188,58 @@
         const SHEETS_CONFIG = {
             sheet1: { name: 'Sheet 1', range: 'A1:Z1000' },
             sheet2: { name: 'Sheet 2', range: 'A1:Z1000' },
-            sheet3: { name: 'Sheet 3', range: 'A1:Z1000' }
+            sheet3: { name: 'Sheet 3', range: 'A1:Z1000' },
+            sheet4: { name: 'Sheet 4', range: 'A1:Z1000' },
+            sheet5: { name: 'Sheet 5', range: 'A1:Z1000' }
         };
 
         async function loadAllSheets() {
             const apiKey = document.getElementById('apiKey').value;
-            const sheet1Id = document.getElementById('sheet1Id').value;
-            const sheet2Id = document.getElementById('sheet2Id').value;
-            const sheet3Id = document.getElementById('sheet3Id').value;
-
-            if (!apiKey || !sheet1Id || !sheet2Id || !sheet3Id) {
-                showError('Please fill in all configuration fields.');
+            
+            if (!apiKey) {
+                showError('Please enter your Google Sheets API key.');
                 return;
             }
 
-            const sheetIds = [sheet1Id, sheet2Id, sheet3Id];
+            // Get all sheet IDs and filter out empty ones
+            const sheetIds = [];
+            const sheetConfigs = [];
+            
+            for (let i = 1; i <= 5; i++) {
+                const sheetId = document.getElementById(`sheet${i}Id`).value.trim();
+                if (sheetId) {
+                    sheetIds.push(sheetId);
+                    sheetConfigs.push({
+                        id: sheetId,
+                        key: `sheet${i}`,
+                        config: SHEETS_CONFIG[`sheet${i}`]
+                    });
+                }
+            }
+
+            if (sheetIds.length === 0) {
+                showError('Please enter at least one Sheet ID.');
+                return;
+            }
+
             const container = document.getElementById('sheetsContainer');
             container.innerHTML = '<div class="col-12 loading"><div class="spinner me-2"></div>Loading sheets...</div>';
 
             try {
-                for (let i = 0; i < sheetIds.length; i++) {
-                    const sheetKey = `sheet${i + 1}`;
-                    const sheetData = await loadSheet(sheetIds[i], apiKey, SHEETS_CONFIG[sheetKey].range);
-                    sheetsData[sheetIds[i]] = sheetData;
-                    renderSheet(sheetIds[i], SHEETS_CONFIG[sheetKey].name, sheetData);
+                container.innerHTML = ''; // Clear loading message
+                
+                for (const sheetConfig of sheetConfigs) {
+                    try {
+                        const sheetData = await loadSheet(sheetConfig.id, apiKey, sheetConfig.config.range);
+                        sheetsData[sheetConfig.id] = sheetData;
+                        renderSheet(sheetConfig.id, sheetConfig.config.name, sheetData);
+                    } catch (error) {
+                        showError(`Error loading ${sheetConfig.config.name}: ${error.message}`);
+                    }
+                }
+                
+                if (Object.keys(sheetsData).length > 0) {
+                    showSuccess(`Successfully loaded ${Object.keys(sheetsData).length} sheet(s)!`);
                 }
             } catch (error) {
                 showError('Error loading sheets: ' + error.message);
@@ -238,7 +269,7 @@
             const rows = data.slice(1);
 
             const sheetHtml = `
-                <div class="col-lg-4 mb-4">
+                <div class="col-lg-6 col-xl-4 mb-4">
                     <div class="sheet-card">
                         <div class="sheet-header">
                             <h5 class="mb-0">${sheetName}</h5>
